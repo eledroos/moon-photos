@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# commit-msg hook: strips Claude Code / Anthropic co-author lines
+# and any other references from commit messages.
+#
+
+MSG_FILE="$1"
+
+# Remove Co-Authored-By / Co-authored-by lines referencing Claude or Anthropic (case-insensitive)
+sed -i '' -E '/^[[:space:]]*[Cc]o-[Aa]uthored-[Bb]y:.*([Cc]laude|[Aa]nthropic)/d' "$MSG_FILE"
+
+# Remove "Generated with Claude Code" lines (with or without emoji prefix)
+sed -i '' -E '/^[[:space:]]*(🤖[[:space:]]*)?[Gg]enerated with [Cc]laude/d' "$MSG_FILE"
+
+# Strip trailing blank lines left behind
+while [[ -s "$MSG_FILE" ]] && [[ "$(tail -c 1 "$MSG_FILE" | xxd -p)" == "0a" ]] && [[ "$(tail -1 "$MSG_FILE")" == "" ]]; do
+  sed -i '' '$ d' "$MSG_FILE"
+done
