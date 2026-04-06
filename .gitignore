@@ -10,3 +10,7 @@ screenshots/
 .claude/
 MEMORY.md
 *.DS_Store
+public/textures/*.jpg
+public/textures/*.png
+public/data/*.csv
+public/models/*.glb
