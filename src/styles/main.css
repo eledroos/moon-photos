@@ -468,7 +468,7 @@ button {
    ========================================================================== */
 .mission-drawer {
   position: fixed;
-  top: 65px; /* below telemetry bar */
+  top: 90px; /* below marquee + telemetry bar */
   left: 0;
   height: calc(100vh - 65px);
   width: 340px;

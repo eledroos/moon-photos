@@ -155,6 +155,9 @@ export function createMissionDrawer(): {
         <li style="font-size:12px;color:var(--text-secondary);"><span style="color:var(--trajectory);">HYG Catalog</span> — Star positions</li>
         <li style="font-size:12px;color:var(--text-secondary);"><span style="color:var(--trajectory);">Three.js</span> — 3D rendering</li>
       </ul>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.4);">
+        A <a href="https://bigdreams.info/" target="_blank" rel="noopener" style="color:#D55E0F;text-decoration:none;font-weight:700;">BIG DREAMS</a> PROJECT
+      </div>
     </section>
   `
 
