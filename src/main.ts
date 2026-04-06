@@ -128,13 +128,18 @@ async function main() {
       controls!.update()
     })
   } else {
-    const scroll = setupScrollNavigation({
+    // Mobile: touch-enabled OrbitControls + tap markers
+    const mobileNav = setupScrollNavigation({
       ctx,
       curve,
       trajectoryData: data.trajectory,
       photos: data.photos.photos,
+      markers,
     })
-    scroll.createMinimap()
+    controls = mobileNav.controls
+    onAnimate(() => {
+      controls!.update()
+    })
   }
 
   // 10. Now create telemetry bar with camera/controls for photo grid
@@ -144,8 +149,8 @@ async function main() {
   })
   telemetry.update(data.trajectory, data.moon, data.photos)
 
-  // 10b. Desktop timeline bar
-  if (!isMobile && controls) {
+  // 10b. Timeline bar (both desktop and mobile — key navigation tool)
+  if (controls) {
     createTimelineBar({
       trajectoryData: data.trajectory,
       photos: data.photos.photos,

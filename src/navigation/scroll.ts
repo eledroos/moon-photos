@@ -1,120 +1,130 @@
 import * as THREE from 'three'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { SceneContext } from '../scene/setup.js'
 import type { Photo, TrajectoryData } from '../../shared/types.js'
-import { getTrajectoryProgress } from '../scene/trajectory.js'
-import { onAnimate } from '../scene/setup.js'
+import type { PhotoMarker } from '../scene/markers.js'
+import { highlightMarker, unhighlightMarker } from '../scene/markers.js'
+import { openPhotoPanel } from '../ui/photo-detail.js'
+import { flyTo } from './fly-to.js'
+import { getCurrentPosition } from '../data/interpolate.js'
+import { SCALE } from '../scene/setup.js'
 
-interface ScrollSetupOptions {
+interface MobileSetupOptions {
   ctx: SceneContext
   curve: THREE.CatmullRomCurve3
   trajectoryData: TrajectoryData
   photos: Photo[]
+  markers: PhotoMarker[]
 }
 
-let scrollProgress = 0
-let targetScrollProgress = 0
-
-export function setupScrollNavigation(options: ScrollSetupOptions): {
+/**
+ * Mobile navigation: touch-enabled OrbitControls + tap-to-select markers.
+ * Much simpler and more reliable than scroll hijacking.
+ */
+export function setupScrollNavigation(options: MobileSetupOptions): {
   getProgress: () => number
   jumpToProgress: (progress: number) => void
   createMinimap: () => HTMLElement
+  controls: OrbitControls
 } {
-  const { ctx, curve, trajectoryData, photos } = options
-  const { camera } = ctx
+  const { ctx, curve, trajectoryData, photos, markers } = options
+  const { camera, renderer } = ctx
 
-  // Create scroll container (tall element to capture scroll)
-  const scrollContainer = document.createElement('div')
-  scrollContainer.style.cssText = `
-    position: fixed; top: 0; left: 0; width: 100%; height: 500vh;
-    z-index: 5; pointer-events: auto;
-  `
-  document.body.appendChild(scrollContainer)
+  // Start camera near Orion
+  const orionPos = getCurrentPosition(trajectoryData.vectors)
+  const orionScenePos = new THREE.Vector3(
+    orionPos[0] * SCALE,
+    orionPos[2] * SCALE,
+    -orionPos[1] * SCALE,
+  )
 
-  // Scroll handler
-  window.addEventListener('scroll', () => {
-    const maxScroll = document.documentElement.scrollHeight - window.innerHeight
-    targetScrollProgress = maxScroll > 0 ? window.scrollY / maxScroll : 0
-  }, { passive: true })
+  // Touch-friendly OrbitControls
+  const controls = new OrbitControls(camera, renderer.domElement)
+  controls.enableDamping = true
+  controls.dampingFactor = 0.08
+  controls.minDistance = 5
+  controls.maxDistance = 1500
+  controls.target.copy(orionScenePos)
+  camera.position.set(
+    orionScenePos.x + 15,
+    orionScenePos.y + 12,
+    orionScenePos.z + 25,
+  )
+  controls.autoRotate = true
+  controls.autoRotateSpeed = 0.3
 
-  // Smooth camera movement along curve
-  onAnimate((delta) => {
-    // Lerp toward target
-    scrollProgress += (targetScrollProgress - scrollProgress) * Math.min(1, delta * 5)
+  // Stop auto-rotate on touch
+  const stopAutoRotate = () => {
+    controls.autoRotate = false
+    renderer.domElement.removeEventListener('touchstart', stopAutoRotate)
+  }
+  renderer.domElement.addEventListener('touchstart', stopAutoRotate)
 
-    const t = Math.max(0.001, Math.min(0.999, scrollProgress))
-    const point = curve.getPointAt(t)
-    const lookAt = curve.getPointAt(Math.min(0.999, t + 0.02))
+  // Tap to select markers (raycasting)
+  const raycaster = new THREE.Raycaster()
+  raycaster.params.Sprite = { threshold: 5 } // Generous touch target
+  let lastTap = 0
 
-    camera.position.copy(point)
-    // Offset camera slightly above the path
-    camera.position.y += 5
-    camera.lookAt(lookAt)
-  })
-
-  function jumpToProgress(progress: number) {
-    const maxScroll = document.documentElement.scrollHeight - window.innerHeight
-    window.scrollTo({ top: progress * maxScroll, behavior: 'smooth' })
+  function getMarkerChildren(): THREE.Object3D[] {
+    const children: THREE.Object3D[] = []
+    for (const marker of markers) {
+      marker.traverse((child) => {
+        if (child instanceof THREE.Mesh) children.push(child)
+      })
+    }
+    return children
   }
 
-  // Listen for "jump to now" events
-  window.addEventListener('jump-to-now', () => {
-    const utc = new Date().toISOString()
-    const progress = getTrajectoryProgress(trajectoryData, utc)
-    jumpToProgress(progress)
+  const raycastTargets = getMarkerChildren()
+
+  renderer.domElement.addEventListener('click', (event) => {
+    // Debounce double-taps
+    const now = Date.now()
+    if (now - lastTap < 300) return
+    lastTap = now
+
+    const mouse = new THREE.Vector2(
+      (event.clientX / window.innerWidth) * 2 - 1,
+      -(event.clientY / window.innerHeight) * 2 + 1,
+    )
+    raycaster.setFromCamera(mouse, camera)
+    const intersects = raycaster.intersectObjects(raycastTargets)
+
+    if (intersects.length > 0) {
+      // Walk up to find parent marker group
+      let obj: THREE.Object3D | null = intersects[0].object
+      while (obj) {
+        if (markers.includes(obj as PhotoMarker)) {
+          const marker = obj as PhotoMarker
+          openPhotoPanel(marker.userData.photo, photos)
+          flyTo(marker.position, camera, controls)
+          return
+        }
+        obj = obj.parent
+      }
+    }
   })
+
+  // Jump to now
+  window.addEventListener('jump-to-now', () => {
+    const pos = getCurrentPosition(trajectoryData.vectors)
+    const target = new THREE.Vector3(pos[0] * SCALE, pos[2] * SCALE, -pos[1] * SCALE)
+    flyTo(target, camera, controls)
+  })
+
+  function jumpToProgress(_progress: number) {
+    // Not used in touch mode, but kept for interface compatibility
+  }
 
   function createMinimap(): HTMLElement {
-    const minimap = document.createElement('aside')
-    minimap.className = 'scroll-minimap'
-
-    // Build minimap HTML
-    let dotsHtml = ''
-    photos.forEach(photo => {
-      const progress = getTrajectoryProgress(trajectoryData, photo.utc)
-      dotsHtml += `<div class="minimap-dot" style="top: ${progress * 100}%"></div>`
-    })
-
-    minimap.innerHTML = `
-      <div class="minimap-track">
-        <div class="minimap-progress" id="minimap-progress"></div>
-
-        <div class="minimap-label" style="top: 0%; color: var(--trajectory);">
-          Earth
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-        </div>
-        <div class="minimap-stage-zone" style="top: 8%;">Earth Orbit</div>
-
-        <div class="minimap-tick" style="top: 15%;"></div>
-        <div class="minimap-stage-zone" style="top: 50%;">Translunar Coast</div>
-        <div class="minimap-tick" style="top: 85%;"></div>
-
-        <div class="minimap-stage-zone" style="top: 92%;">Lunar Orbit</div>
-        <div class="minimap-label" style="top: 100%; color: var(--text-primary);">
-          Moon
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 016 6c0 7-6 12-6 12s-6-5-6-12a6 6 0 016-6z"/></svg>
-        </div>
-
-        ${dotsHtml}
-
-        <div class="minimap-current" id="minimap-current" style="top: 0%;">
-          <div class="current-label">Artemis II</div>
-        </div>
-      </div>
-    `
-
-    // Update minimap on animation frame
-    onAnimate(() => {
-      const progress = document.getElementById('minimap-progress')
-      const current = document.getElementById('minimap-current')
-      if (progress) progress.style.height = `${scrollProgress * 100}%`
-      if (current) current.style.top = `${scrollProgress * 100}%`
-    })
-
-    const uiLayer = document.getElementById('ui-layer')
-    if (uiLayer) uiLayer.appendChild(minimap)
-
-    return minimap
+    // Return empty element — mobile uses the timeline bar instead
+    return document.createElement('div')
   }
 
-  return { getProgress: () => scrollProgress, jumpToProgress, createMinimap }
+  return {
+    getProgress: () => 0,
+    jumpToProgress,
+    createMinimap,
+    controls,
+  }
 }
