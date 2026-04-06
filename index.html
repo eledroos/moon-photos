@@ -3,7 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Artemis II — Photo Trajectory</title>
+
+  <title>Artemis II — Photo Trajectory Viewer</title>
+  <meta name="description" content="An interactive 3D visualization mapping NASA Artemis II crew photographs to Orion's real trajectory around the Moon. Live telemetry, 28 mission photos, astronomically accurate rendering.">
+
+  <!-- Open Graph (Facebook, LinkedIn, iMessage, etc.) -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Artemis II — Photo Trajectory Viewer">
+  <meta property="og:description" content="Explore crew photographs pinned to Orion's real trajectory around the Moon. Live mission data from JPL Horizons.">
+  <meta property="og:image" content="https://moon-photos.pages.dev/social-card.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:url" content="https://moon-photos.pages.dev">
+  <meta property="og:site_name" content="Artemis II Photo Trajectory">
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Artemis II — Photo Trajectory Viewer">
+  <meta name="twitter:description" content="Explore crew photographs pinned to Orion's real trajectory around the Moon. Live mission data from JPL Horizons.">
+  <meta name="twitter:image" content="https://moon-photos.pages.dev/social-card.jpg">
+
+  <!-- Theme / PWA hints -->
+  <meta name="theme-color" content="#0A0E1A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -16,6 +42,35 @@
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
     gtag('config', 'G-62Q49Z949Q');
+  </script>
+
+  <!-- Structured data for search engines -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Artemis II Photo Trajectory Viewer",
+    "description": "Interactive 3D visualization mapping NASA Artemis II crew photographs to Orion's trajectory around the Moon",
+    "url": "https://moon-photos.pages.dev",
+    "applicationCategory": "Education",
+    "operatingSystem": "Web",
+    "creator": {
+      "@type": "Organization",
+      "name": "Big Dreams",
+      "url": "https://bigdreams.info/"
+    },
+    "about": {
+      "@type": "Event",
+      "name": "Artemis II",
+      "description": "NASA's first crewed lunar flyby mission since Apollo 17 (1972)",
+      "startDate": "2026-04-01",
+      "endDate": "2026-04-10",
+      "organizer": {
+        "@type": "Organization",
+        "name": "NASA"
+      }
+    }
+  }
   </script>
 </head>
 <body>
