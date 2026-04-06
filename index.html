@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Artemis II — Photo Trajectory</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div class="ambient-orb orb-1"></div>
+  <div class="ambient-orb orb-2"></div>
+  <div class="ambient-orb orb-3"></div>
+
+  <div id="loading-screen" class="loading-screen">
+    <h1 class="loading-title">ARTEMIS II</h1>
+    <div class="progress-container">
+      <div class="progress-bar" id="loading-bar"></div>
+    </div>
+    <div class="label-text loading-status" id="loading-text">Establishing link...</div>
+  </div>
+
+  <div id="ui-layer"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

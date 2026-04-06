@@ -1,0 +1,24 @@
+{
+  "mission": {
+    "name": "Artemis II",
+    "spacecraft": "Orion (Integrity)",
+    "launchUtc": "2026-04-01T22:35:00Z",
+    "splashdownUtc": "2026-04-10T23:00:00Z",
+    "horizonsId": "-1024",
+    "moonId": "301",
+    "sunId": "10"
+  },
+  "api": {
+    "nasaApiKey": "YOUR_KEY_HERE",
+    "horizonsBaseUrl": "https://ssd.jpl.nasa.gov/api/horizons.api",
+    "nasaImagesBaseUrl": "https://images-api.nasa.gov",
+    "nasaAssetsBaseUrl": "https://images-assets.nasa.gov"
+  },
+  "polling": {
+    "trajectoryIntervalMs": 1800000,
+    "photoIntervalMs": 600000,
+    "trajectoryStepMin": 15,
+    "moonStepMin": 60,
+    "sunStepMin": 60
+  }
+}

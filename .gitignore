@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-server/
+data/
+.env
+config.json
+screenshots/
+.superpowers/
+.playwright-mcp/
+.claude/
+MEMORY.md
+*.DS_Store
