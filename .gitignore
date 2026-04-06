@@ -14,3 +14,4 @@ public/textures/*.jpg
 public/textures/*.png
 public/data/*.csv
 public/models/*.glb
+public/api/

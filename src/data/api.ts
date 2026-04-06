@@ -1,45 +1,39 @@
 import type { TrajectoryData, BodyData, PhotosData } from '../../shared/types.js'
 
-const API_BASE = '/api'
+/**
+ * Fetch a JSON endpoint. Tries /api/name first (Express server),
+ * falls back to /api/name.json (static Cloudflare Pages build).
+ */
+async function fetchJSON<T>(name: string, fallback: T): Promise<T> {
+  // Try Express server endpoint first
+  try {
+    const res = await fetch(`/api/${name}`)
+    if (res.ok) return await res.json()
+  } catch { /* fall through */ }
+
+  // Fallback to static .json file (Cloudflare Pages)
+  try {
+    const res = await fetch(`/api/${name}.json`)
+    if (res.ok) return await res.json()
+  } catch { /* fall through */ }
+
+  return fallback
+}
 
 export async function fetchTrajectory(): Promise<TrajectoryData | null> {
-  try {
-    const res = await fetch(`${API_BASE}/trajectory`)
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
+  return fetchJSON<TrajectoryData | null>('trajectory', null)
 }
 
 export async function fetchMoon(): Promise<BodyData | null> {
-  try {
-    const res = await fetch(`${API_BASE}/moon`)
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
+  return fetchJSON<BodyData | null>('moon', null)
 }
 
 export async function fetchSun(): Promise<BodyData | null> {
-  try {
-    const res = await fetch(`${API_BASE}/sun`)
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
+  return fetchJSON<BodyData | null>('sun', null)
 }
 
 export async function fetchPhotos(): Promise<PhotosData> {
-  try {
-    const res = await fetch(`${API_BASE}/photos`)
-    if (!res.ok) return { lastUpdated: '', photos: [] }
-    return await res.json()
-  } catch {
-    return { lastUpdated: '', photos: [] }
-  }
+  return fetchJSON<PhotosData>('photos', { lastUpdated: '', photos: [] })
 }
 
 export interface AllData {
