@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Artemis II Photo-Trajectory Viewer</title>
+    
+    <!-- Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons (Lucide) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        /* ==========================================================================
+           DESIGN SYSTEM & VARIABLES
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-deep-space: #0A0E1A;
+            --orb-1: #0689E4;
+            --orb-2: #1299CA;
+            --orb-3: #4A2FBD;
+            --trajectory: #64C8DC;
+            --accent-active: #D55E0F; /* Mirror's Edge Wayfinding */
+            --marker-inactive: #4577EA;
+            --marker-active: #FFFFFF;
+            
+            --glass-bg: rgba(255, 255, 255, 0.06);
+            --glass-border: rgba(255, 255, 255, 0.10);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.36);
+            
+            --text-primary: #F0F0F0;
+            --text-secondary: #8899AA;
+            --telemetry-data: #6FD7EC;
+            --status-nominal: #71AB23;
+
+            /* Typography */
+            --font-ui: 'Inter', sans-serif;
+            --font-data: 'Space Mono', monospace;
+            
+            /* Animation */
+            --transition-smooth: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            --transition-bounce: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-deep-space);
+            color: var(--text-primary);
+            font-family: var(--font-ui);
+            overflow: hidden; /* Prevent scrolling, canvas is fixed */
+            -webkit-font-smoothing: antialiased;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-family: inherit;
+            color: inherit;
+            outline: none;
+        }
+
+        /* ==========================================================================
+           UTILITIES
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+        }
+
+        .data-text {
+            font-family: var(--font-data);
+            color: var(--telemetry-data);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .label-text {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+        }
+
+        .accent-color { color: var(--accent-active); }
+        .nominal-color { color: var(--status-nominal); }
+
+        /* ==========================================================================
+           3D SCENE PLACEHOLDER (Frutiger Nova Background)
+           ========================================================================== */
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            background: radial-gradient(circle at 50% 50%, #111827 0%, var(--bg-deep-space) 100%);
+        }
+
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            pointer-events: none;
+            opacity: 0.25;
+            will-change: transform;
+            animation: floatOrb 20s infinite alternate ease-in-out;
+        }
+
+        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: var(--orb-1); }
+        .orb-2 { bottom: -20%; right: -10%; width: 60vw; height: 60vw; background: var(--orb-2); animation-delay: -5s; }
+        .orb-3 { top: 40%; left: 40%; width: 40vw; height: 40vw; background: var(--orb-3); animation-delay: -10s; }
+
+        @keyframes floatOrb {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(10%, 10%) scale(1.1); }
+        }
+
+        /* Removed CSS mock trajectory/markers */
+
+        /* ==========================================================================
+           UI SHELL & COMPONENTS
+           ========================================================================== */
+        #ui-layer {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none; /* Let clicks pass through to 3D scene */
+            display: flex;
+            flex-direction: column;
+        }
+
+        #ui-layer > * {
+            pointer-events: auto; /* Re-enable clicks for UI elements */
+        }
+
+        /* --- 1. Telemetry Bar --- */
+        .telemetry-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0 0 12px 12px;
+            border-top: none;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 1600px;
+        }
+
+        .telemetry-group {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .telemetry-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .met-counter {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge.live {
+            border-color: rgba(113, 171, 35, 0.3);
+        }
+        
+        .badge.live::before {
+            content: '';
+            width: 6px; height: 6px;
+            background: var(--status-nominal);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--status-nominal);
+        }
+
+        .btn-primary {
+            background: var(--accent-active);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition-smooth);
+        }
+
+        .btn-primary:hover {
+            background: #e86a1c;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(213, 94, 15, 0.4);
+        }
+
+        .btn-icon {
+            width: 40px; height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            transition: var(--transition-smooth);
+        }
+
+        .btn-icon:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* --- 2. Photo Detail Panel --- */
+        .photo-panel {
+            position: absolute;
+            right: 0; top: 0;
+            width: 420px;
+            height: 100vh;
+            border-radius: 20px 0 0 20px;
+            border-right: none;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            transform: translateX(100%);
+            transition: transform var(--transition-smooth);
+            overflow-y: auto;
+        }
+
+        .photo-panel.active {
+            transform: translateX(0);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .photo-hero {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            background: #000;
+            aspect-ratio: 4/3;
+        }
+
+        .photo-hero img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+        }
+
+        .photo-nav {
+            position: absolute;
+            bottom: 10px; right: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .photo-nav button {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.2s;
+        }
+
+        .photo-nav button:hover {
+            background: var(--accent-active);
+            border-color: var(--accent-active);
+        }
+
+        .photo-caption {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            background: rgba(0,0,0,0.2);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .data-block h4 {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* --- 3. Mission Info Drawer --- */
+        .mission-drawer {
+            position: absolute;
+            left: 0; top: 0;
+            width: 380px;
+            height: 100vh;
+            border-radius: 0 20px 20px 0;
+            border-left: none;
+            padding: 2rem;
+            transform: translateX(-100%);
+            transition: transform var(--transition-smooth);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .mission-drawer.active {
+            transform: translateX(0);
+        }
+
+        .crew-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .crew-member {
+            text-align: center;
+        }
+
+        .crew-avatar {
+            width: 80px; height: 80px;
+            border-radius: 50%;
+            background: var(--glass-bg);
+            border: 2px solid var(--glass-border);
+            margin: 0 auto 10px;
+            overflow: hidden;
+        }
+        
+        .crew-avatar img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+        }
+
+        .crew-member h5 { font-size: 14px; margin-bottom: 2px; }
+        .crew-member span { font-size: 12px; color: var(--text-secondary); }
+
+        /* --- 4. FAB (Mobile) --- */
+        .fab-jump {
+            display: none; /* Desktop hidden */
+            position: absolute;
+            bottom: 90px; right: 20px;
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: var(--accent-active);
+            color: white;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(213, 94, 15, 0.5);
+            z-index: 20;
+        }
+
+        /* --- 5. Scroll Progress Minimap --- */
+        .scroll-minimap {
+            position: absolute;
+            right: 40px; top: 50%;
+            transform: translateY(-50%);
+            height: 60vh;
+            width: 2px;
+            display: flex;
+            justify-content: center;
+            pointer-events: auto;
+            z-index: 20;
+        }
+
+        .minimap-track {
+            width: 2px;
+            height: 100%;
+            background: rgba(100, 200, 220, 0.2);
+            position: relative;
+            border-radius: 2px;
+        }
+
+        .minimap-progress {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 45%;
+            background: var(--trajectory);
+            border-radius: 2px;
+            box-shadow: 0 0 8px var(--trajectory);
+        }
+
+        .minimap-tick {
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 2px;
+            background: rgba(100, 200, 220, 0.5);
+            border-radius: 1px;
+        }
+
+        .minimap-label, .minimap-stage-zone, .current-label {
+            position: absolute;
+            right: 15px;
+            transform: translateY(-50%);
+            white-space: nowrap;
+            text-align: right;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .minimap-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .minimap-stage-zone {
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.6;
+        }
+
+        .current-label {
+            color: var(--accent-active);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .minimap-dot {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px; height: 6px;
+            background: var(--marker-inactive);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .minimap-dot:hover { background: white; transform: translateX(-50%) scale(1.5); box-shadow: 0 0 8px white;}
+
+        .minimap-current {
+            position: absolute;
+            left: 50%; top: 45%;
+            transform: translate(-50%, -50%);
+            width: 10px; height: 10px;
+            background: var(--accent-active);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-active);
+            z-index: 2;
+        }
+
+        /* --- 6. Tooltip (Desktop) --- */
+        .hover-tooltip {
+            position: absolute;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            /* Position injected via JS */
+            left: 42%; top: 43%;
+        }
+
+        .hover-tooltip.visible {
+            opacity: 1;
+        }
+
+        .tooltip-thumb {
+            width: 40px; height: 40px;
+            border-radius: 4px;
+            background: #222;
+            object-fit: cover;
+        }
+
+        /* --- 7. Loading State --- */
+        #loading-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: var(--bg-deep-space);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease, visibility 0.8s;
+        }
+
+        .loading-title {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            margin-bottom: 2rem;
+            background: linear-gradient(to right, #FFF, var(--trajectory));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .progress-container {
+            width: 240px;
+            height: 2px;
+            background: rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+            border-radius: 2px;
+        }
+
+        .progress-bar {
+            position: absolute;
+            top: 0; left: 0; height: 100%;
+            background: var(--accent-active);
+            width: 0%;
+            animation: loadProgress 2s ease-out forwards;
+            box-shadow: 0 0 10px var(--accent-active);
+        }
+
+        @keyframes loadProgress {
+            0% { width: 0%; }
+            50% { width: 60%; }
+            100% { width: 100%; }
+        }
+
+        /* ==========================================================================
+           RESPONSIVE DESIGN
+           ========================================================================== */
+        
+        /* Mobile adjustments (< 768px) */
+        @media (max-width: 767px) {
+            .telemetry-bar {
+                top: auto; bottom: 0;
+                border-radius: 12px 12px 0 0;
+                border-top: 1px solid var(--glass-border);
+                border-bottom: none;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+                padding: 1rem;
+                overflow-x: auto;
+            }
+
+            .telemetry-group {
+                width: 100%;
+                justify-content: space-between;
+                gap: 1rem;
+            }
+
+            .desktop-only { display: none !important; }
+            .fab-jump { display: flex; }
+            .scroll-minimap { right: 10px; height: 50vh; }
+
+            .photo-panel {
+                width: 100%; height: 75vh;
+                top: auto; bottom: 0;
+                border-radius: 20px 20px 0 0;
+                border-right: 1px solid var(--glass-border);
+                transform: translateY(100%);
+            }
+            .photo-panel.active { transform: translateY(0); }
+
+            .mission-drawer { width: 100%; border-radius: 0; }
+        }
+
+        /* Tablet (>= 768px) */
+        @media (min-width: 768px) {
+            .telemetry-bar { top: 0; border-radius: 0 0 12px 12px; }
+            .mobile-only { display: none !important; }
+        }
+
+        /* Desktop (>= 1200px) */
+        @media (min-width: 1200px) {
+            .telemetry-bar { margin: 1rem auto; border-radius: 12px; border: 1px solid var(--glass-border); max-width: 96%; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <!-- Reusing ambient orbs for loading background -->
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-3"></div>
+        <h1 class="loading-title">ARTEMIS II</h1>
+        <div class="progress-container">
+            <div class="progress-bar"></div>
+        </div>
+        <div class="label-text" style="margin-top: 1rem; color: var(--trajectory)">Establishing link...</div>
+    </div>
+
+    <!-- 3D Scene Container -->
+    <div id="canvas-container">
+        <!-- Ambient orbs provide the CSS glow BEHIND the transparent Three.js canvas -->
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+        <div class="ambient-orb orb-3"></div>
+    </div>
+
+    <!-- UI Overlay Layer -->
+    <div id="ui-layer">
+        
+        <!-- 1. Telemetry Bar -->
+        <header class="telemetry-bar glass-panel">
+            <div class="telemetry-group">
+                <button class="btn-icon" onclick="toggleMissionDrawer()" aria-label="Menu">
+                    <i data-lucide="menu"></i>
+                </button>
+                <div class="badge live">
+                    <span class="label-text" style="color: var(--text-primary)">Translunar Coast</span>
+                </div>
+            </div>
+
+            <div class="telemetry-group">
+                <div class="telemetry-item">
+                    <span class="label-text">Mission Elapsed Time</span>
+                    <span class="met-counter data-text" id="met-display">002:14:36:42</span>
+                </div>
+                
+                <div class="telemetry-item desktop-only">
+                    <span class="label-text">Dist to Earth</span>
+                    <span class="data-text">245,012 <span style="font-size:12px; color:var(--text-secondary)">km</span></span>
+                </div>
+
+                <div class="telemetry-item desktop-only">
+                    <span class="label-text">Velocity</span>
+                    <span class="data-text">2.41 <span style="font-size:12px; color:var(--text-secondary)">km/s</span></span>
+                </div>
+            </div>
+
+            <div class="telemetry-group desktop-only">
+                <div class="badge">
+                    <i data-lucide="image" size="14"></i>
+                    <span>14 Photos</span>
+                </div>
+                <button class="btn-primary">
+                    <i data-lucide="crosshair" size="16"></i>
+                    Jump to Now
+                </button>
+            </div>
+        </header>
+
+        <!-- 5. Scroll Progress Minimap -->
+        <aside class="scroll-minimap desktop-only">
+            <div class="minimap-track">
+                <div class="minimap-progress"></div>
+                
+                <!-- Stages Demarcations -->
+                <div class="minimap-label" style="top: 0%; color: var(--trajectory);">
+                    Earth <i data-lucide="globe" size="14"></i>
+                </div>
+                <div class="minimap-stage-zone" style="top: 8%;">Earth Orbit</div>
+                
+                <div class="minimap-tick" style="top: 15%;"></div>
+                <div class="minimap-stage-zone" style="top: 50%;">Translunar Coast</div>
+                <div class="minimap-tick" style="top: 85%;"></div>
+                
+                <div class="minimap-stage-zone" style="top: 92%;">Lunar Orbit</div>
+                <div class="minimap-label" style="top: 100%; color: var(--text-primary);">
+                    Moon <i data-lucide="moon" size="14"></i>
+                </div>
+
+                <!-- Photo Markers -->
+                <div class="minimap-dot" style="top: 10%;"></div>
+                <div class="minimap-dot" style="top: 30%;"></div>
+                <div class="minimap-dot" style="top: 75%;"></div>
+                
+                <!-- Current Position -->
+                <div class="minimap-current" style="top: 45%;">
+                    <div class="current-label">Artemis II</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 4. Mobile FAB -->
+        <button class="fab-jump mobile-only">
+            <i data-lucide="crosshair"></i>
+        </button>
+
+        <!-- 6. Hover Tooltip (Desktop) -->
+        <div class="hover-tooltip desktop-only" id="photo-tooltip">
+            <img src="https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?auto=format&fit=crop&q=80&w=100&h=100" class="tooltip-thumb" alt="thumb">
+            <div>
+                <div class="label-text accent-color">Flight Day 3</div>
+                <div style="font-size: 13px; font-weight: 500; margin-top: 2px;">Earth Departure</div>
+            </div>
+        </div>
+
+        <!-- 2. Photo Detail Panel -->
+        <aside class="photo-panel glass-panel" id="photo-panel">
+            <div class="panel-header">
+                <div class="badge"><i data-lucide="camera" size="14"></i> Flight Day 3</div>
+                <button class="btn-icon" style="width:32px; height:32px" onclick="togglePhotoPanel()">
+                    <i data-lucide="x" size="16"></i>
+                </button>
+            </div>
+
+            <div class="photo-hero">
+                <img src="https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?auto=format&fit=crop&q=80&w=800" alt="Earth from space">
+                <div class="photo-nav">
+                    <button><i data-lucide="chevron-left" size="18"></i></button>
+                    <button><i data-lucide="chevron-right" size="18"></i></button>
+                </div>
+            </div>
+
+            <div>
+                <h2 class="panel-title mb-2">Earth receding during translunar coast</h2>
+                <p class="photo-caption" style="margin-top: 8px;">
+                    Captured by Mission Specialist Christina Koch looking back through the Orion spacecraft window. The Earth's terminator line is clearly visible as the spacecraft leaves orbit.
+                </p>
+            </div>
+
+            <!-- Context Grids -->
+            <div class="data-grid">
+                <div class="data-block">
+                    <h4><i data-lucide="camera" size="12"></i> Camera</h4>
+                    <div class="data-text" style="font-size:13px; color:var(--text-primary)">Nikon Z9</div>
+                    <div class="label-text">24-70mm f/2.8</div>
+                </div>
+                <div class="data-block">
+                    <h4><i data-lucide="aperture" size="12"></i> Exposure</h4>
+                    <div class="data-text" style="font-size:13px; color:var(--text-primary)">1/2000s • f/8</div>
+                    <div class="label-text">ISO 400</div>
+                </div>
+                <div class="data-block" style="grid-column: span 2;">
+                    <h4><i data-lucide="clock" size="12"></i> Capture Time (MET)</h4>
+                    <div class="data-text">002:08:15:22</div>
+                    <div class="label-text">2025-11-14 18:42 UTC</div>
+                </div>
+            </div>
+            
+            <div class="data-grid" style="margin-top:-8px;">
+                <div class="data-block">
+                    <h4><i data-lucide="globe" size="12"></i> Dist to Earth</h4>
+                    <div class="data-text" style="font-size:14px;">185,200 km</div>
+                </div>
+                <div class="data-block">
+                    <h4><i data-lucide="moon" size="12"></i> Dist to Moon</h4>
+                    <div class="data-text" style="font-size:14px;">202,400 km</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 3. Mission Info Drawer -->
+        <aside class="mission-drawer glass-panel" id="mission-drawer">
+            <div class="panel-header" style="margin-bottom: 1rem;">
+                <h2 class="panel-title">Mission Overview</h2>
+                <button class="btn-icon" style="width:32px; height:32px" onclick="toggleMissionDrawer()">
+                    <i data-lucide="x" size="16"></i>
+                </button>
+            </div>
+
+            <div>
+                <h3 class="label-text mb-2" style="margin-bottom: 12px; color: var(--trajectory)">The Crew</h3>
+                <div class="crew-grid">
+                    <div class="crew-member">
+                        <div class="crew-avatar">
+                            <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150" alt="Reid Wiseman">
+                        </div>
+                        <h5>Reid Wiseman</h5>
+                        <span>Commander</span>
+                    </div>
+                    <div class="crew-member">
+                        <div class="crew-avatar">
+                            <img src="https://images.unsplash.com/photo-1607990281513-2c110a25bd8c?auto=format&fit=crop&q=80&w=150" alt="Victor Glover">
+                        </div>
+                        <h5>Victor Glover</h5>
+                        <span>Pilot</span>
+                    </div>
+                    <div class="crew-member">
+                        <div class="crew-avatar">
+                            <img src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150" alt="Christina Koch">
+                        </div>
+                        <h5>Christina Koch</h5>
+                        <span>Mission Spec. 1</span>
+                    </div>
+                    <div class="crew-member">
+                        <div class="crew-avatar">
+                            <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150" alt="Jeremy Hansen">
+                        </div>
+                        <h5>Jeremy Hansen</h5>
+                        <span>Mission Spec. 2</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 1rem;">
+                <h3 class="label-text mb-2" style="margin-bottom: 12px; color: var(--trajectory)">About this Tracker</h3>
+                <p class="photo-caption" style="font-size: 13px;">
+                    This interactive visualization maps photographs taken by the Artemis II crew to the exact astronomical coordinates where they were captured. Trajectory data is provided by JPL Horizons.
+                </p>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Interactions Script -->
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // 1. Loading Screen Sequence
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const loader = document.getElementById('loading-screen');
+                loader.style.opacity = '0';
+                setTimeout(() => { loader.style.visibility = 'hidden'; }, 800);
+            }, 2200); // Wait for the 2s progress bar animation
+        });
+
+        // 2. Panel Toggles
+        const photoPanel = document.getElementById('photo-panel');
+        const missionDrawer = document.getElementById('mission-drawer');
+
+        function togglePhotoPanel() {
+            if(missionDrawer.classList.contains('active')) {
+                missionDrawer.classList.remove('active');
+            }
+            photoPanel.classList.toggle('active');
+        }
+
+        function toggleMissionDrawer() {
+            if(photoPanel.classList.contains('active')) {
+                photoPanel.classList.remove('active');
+            }
+            missionDrawer.classList.toggle('active');
+        }
+
+        // 3. Simulated MET Timer (Just to show the tabular nums updating)
+        const metDisplay = document.getElementById('met-display');
+        let seconds = 42;
+        let minutes = 36;
+        let hours = 14;
+        let days = 2;
+
+        setInterval(() => {
+            seconds++;
+            if(seconds >= 60) { seconds = 0; minutes++; }
+            if(minutes >= 60) { minutes = 0; hours++; }
+            if(hours >= 24) { hours = 0; days++; }
+
+            const pad = (num) => num.toString().padStart(2, '0');
+            const padDays = (num) => num.toString().padStart(3, '0');
+
+            metDisplay.textContent = `${padDays(days)}:${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }, 1000);
+
+        // 4. THREE.JS SCENE INTEGRATION
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        
+        // Camera setup
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 15, 40);
+
+        // Transparent renderer lets the CSS Frutiger gradient orbs bleed through
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        // OrbitControls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 5;
+        controls.maxDistance = 150;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        directionalLight.position.set(50, 20, 30);
+        scene.add(directionalLight);
+
+        // Procedural Starfield
+        const starGeo = new THREE.BufferGeometry();
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1, transparent: true, opacity: 0.8 });
+        const starVertices = [];
+        for(let i=0; i<2000; i++) {
+            const x = (Math.random() - 0.5) * 400;
+            const y = (Math.random() - 0.5) * 400;
+            const z = (Math.random() - 0.5) * 400;
+            // Keep stars out of the immediate center
+            if(Math.sqrt(x*x + y*y + z*z) > 50) {
+                starVertices.push(x, y, z);
+            }
+        }
+        starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        const stars = new THREE.Points(starGeo, starMaterial);
+        scene.add(stars);
+
+        // --- EXPERIMENTAL VISUALS: HERO STARS / FLARES ---
+        // Added to demonstrate how highly pronounced, glowing stars *could* look.
+        // Note: The design brief emphasizes a clean, Frutiger Nova "resort in the stars" look. 
+        // This adds extra decorative "chrome" just for visualization purposes as requested!
+        const flareCanvas = document.createElement('canvas');
+        flareCanvas.width = 128;
+        flareCanvas.height = 128;
+        const flareCtx = flareCanvas.getContext('2d');
+        const gradient = flareCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        gradient.addColorStop(0.1, 'rgba(200, 230, 255, 0.9)');
+        gradient.addColorStop(0.4, 'rgba(100, 200, 220, 0.3)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        flareCtx.fillStyle = gradient;
+        flareCtx.fillRect(0, 0, 128, 128);
+        const flareTexture = new THREE.CanvasTexture(flareCanvas);
+
+        const heroStarGeo = new THREE.BufferGeometry();
+        const heroStarVertices = [];
+        for(let i=0; i<75; i++) {
+            const x = (Math.random() - 0.5) * 300;
+            const y = (Math.random() - 0.5) * 300;
+            const z = (Math.random() - 0.5) * 300;
+            if(Math.sqrt(x*x + y*y + z*z) > 60) {
+                heroStarVertices.push(x, y, z);
+            }
+        }
+        heroStarGeo.setAttribute('position', new THREE.Float32BufferAttribute(heroStarVertices, 3));
+        const heroStarMaterial = new THREE.PointsMaterial({
+            size: 12,
+            map: flareTexture,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const heroStars = new THREE.Points(heroStarGeo, heroStarMaterial);
+        scene.add(heroStars);
+        // --- END EXPERIMENTAL VISUALS ---
+
+        // Earth (Stylized Flat Shading)
+        const earthGroup = new THREE.Group();
+        const earthGeo = new THREE.SphereGeometry(6, 32, 32);
+        const earthMat = new THREE.MeshPhongMaterial({
+            color: 0x0689E4, // Frutiger blue
+            emissive: 0x011328,
+            specular: 0x444444,
+            shininess: 40,
+            flatShading: true
+        });
+        const earth = new THREE.Mesh(earthGeo, earthMat);
+        earthGroup.add(earth);
+        
+        // Earth Atmosphere (Wireframe)
+        const atmosGeo = new THREE.SphereGeometry(6.3, 24, 24);
+        const atmosMat = new THREE.MeshBasicMaterial({ color: 0x64C8DC, transparent: true, opacity: 0.15, wireframe: true });
+        const atmosphere = new THREE.Mesh(atmosGeo, atmosMat);
+        earthGroup.add(atmosphere);
+        scene.add(earthGroup);
+
+        // Moon
+        const moonGeo = new THREE.SphereGeometry(1.5, 16, 16);
+        const moonMat = new THREE.MeshPhongMaterial({ color: 0x8899AA, flatShading: true });
+        const moon = new THREE.Mesh(moonGeo, moonMat);
+        moon.position.set(35, 8, -25);
+        scene.add(moon);
+
+        // Trajectory Path (Bezier Curve)
+        const curve = new THREE.CubicBezierCurve3(
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(15, 12, -5),
+            new THREE.Vector3(25, -5, -15),
+            moon.position
+        );
+        const points = curve.getPoints(100);
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x64C8DC, transparent: true, opacity: 0.6, linewidth: 2 });
+        const trajectoryLine = new THREE.Line(lineGeo, lineMat);
+        scene.add(trajectoryLine);
+
+        // Photo Markers
+        const markerGeo = new THREE.SphereGeometry(0.4, 16, 16);
+        const markerMatInactive = new THREE.MeshBasicMaterial({ color: 0x4577EA });
+        
+        const photoPositions = [0.15, 0.45, 0.75]; // % along trajectory curve
+        const interactiveObjects = [];
+        
+        const markerTitles = ["Earth Departure", "Translunar Injection", "Lunar Approach"];
+
+        photoPositions.forEach((t, i) => {
+            const pt = curve.getPoint(t);
+            const marker = new THREE.Mesh(markerGeo, markerMatInactive.clone());
+            marker.position.copy(pt);
+            marker.userData = { isPhoto: true, id: i, title: markerTitles[i] };
+            scene.add(marker);
+            interactiveObjects.push(marker);
+        });
+
+        // Current Position Indicator (Mirror's Edge Orange)
+        const currentPt = curve.getPoint(0.55);
+        const currentMarkerMat = new THREE.MeshBasicMaterial({ color: 0xD55E0F });
+        const currentMarker = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), currentMarkerMat);
+        currentMarker.position.copy(currentPt);
+        scene.add(currentMarker);
+
+        // Add glow ring to current position
+        const ringGeo = new THREE.RingGeometry(0.7, 0.9, 32);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xD55E0F, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const currentRing = new THREE.Mesh(ringGeo, ringMat);
+        currentRing.position.copy(currentPt);
+        scene.add(currentRing);
+
+        // 5. Raycasting for Tooltips & Clicks
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let hoveredMarker = null;
+        const tooltip = document.getElementById('photo-tooltip');
+
+        window.addEventListener('mousemove', (event) => {
+            // Normalize mouse coordinates
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactiveObjects);
+
+            if (intersects.length > 0) {
+                document.body.style.cursor = 'pointer';
+                const object = intersects[0].object;
+
+                if (hoveredMarker !== object) {
+                    if (hoveredMarker) hoveredMarker.material.color.setHex(0x4577EA);
+                    hoveredMarker = object;
+                    hoveredMarker.material.color.setHex(0xFFFFFF); // Highlight white on hover
+                    
+                    if (window.innerWidth >= 1200) {
+                        tooltip.classList.add('visible');
+                        tooltip.querySelector('div > div:nth-child(2)').textContent = hoveredMarker.userData.title;
+                    }
+                }
+
+                // Project 3D coordinate to 2D screen coordinate for Tooltip
+                if (window.innerWidth >= 1200 && hoveredMarker) {
+                    const vector = hoveredMarker.position.clone();
+                    vector.project(camera);
+                    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
+                    tooltip.style.left = `${x + 20}px`;
+                    tooltip.style.top = `${y - 20}px`;
+                }
+            } else {
+                document.body.style.cursor = 'default';
+                if (hoveredMarker) {
+                    hoveredMarker.material.color.setHex(0x4577EA); // Revert to blue
+                    hoveredMarker = null;
+                    tooltip.classList.remove('visible');
+                }
+            }
+        });
+
+        // Click on 3D Marker to open panel
+        window.addEventListener('click', (event) => {
+            // Don't trigger if clicking on UI elements
+            if(event.target.closest('.glass-panel') || event.target.closest('button')) return;
+            
+            if (hoveredMarker) {
+                if(!photoPanel.classList.contains('active')) {
+                    togglePhotoPanel();
+                }
+            } else {
+                // Click empty space to close panel
+                if(photoPanel.classList.contains('active') && window.innerWidth >= 1200) {
+                    photoPanel.classList.remove('active');
+                }
+            }
+        });
+
+        // "Jump to Now" Camera Animation
+        function jumpToCurrentPosition() {
+            // Animate camera to look at the orange marker
+            const targetPos = currentMarker.position.clone();
+            const camOffset = new THREE.Vector3(-5, 5, 10);
+            
+            // Simple hard set for prototype (can use GSAP for smooth tweening)
+            camera.position.copy(targetPos).add(camOffset);
+            controls.target.copy(targetPos);
+        }
+
+        document.querySelector('.btn-primary').addEventListener('click', jumpToCurrentPosition);
+        document.querySelector('.fab-jump').addEventListener('click', jumpToCurrentPosition);
+
+        // 6. Animation Loop
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            
+            // Gentle rotations
+            earth.rotation.y += 0.001;
+            atmosphere.rotation.y += 0.0015;
+            moon.rotation.y += 0.002;
+            
+            // Experimental: Twinkle the hero stars
+            if (typeof heroStars !== 'undefined') {
+                heroStars.material.opacity = 0.5 + Math.sin(time * 1.5) * 0.4;
+            }
+
+            // Make current position ring face camera & pulse
+            currentRing.lookAt(camera.position);
+            const pulseScale = 1 + Math.sin(time * 3) * 0.3;
+            currentRing.scale.set(pulseScale, pulseScale, pulseScale);
+            currentRing.material.opacity = 0.8 - (pulseScale - 1);
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start animation immediately, it runs behind the loading screen
+        animate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Artemis II Photo-Trajectory Viewer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES (DESIGN TOKENS)
+           ========================================================================== */
+        :root {
+            /* Palette */
+            --space-bg: #0A0E1A;
+            --orb-1: #0689E4;
+            --orb-2: #1299CA;
+            --orb-3: #4A2FBD;
+            --ribbon: #64C8DC;
+            --accent: #D55E0F;
+            --photo-inactive: #4577EA;
+            --photo-active: #FFFFFF;
+            
+            --glass-bg: rgba(255, 255, 255, 0.06);
+            --glass-border: rgba(255, 255, 255, 0.10);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.36);
+            
+            --text-primary: #F0F0F0;
+            --text-secondary: #8899AA;
+            --telemetry: #6FD7EC;
+            --nominal: #71AB23;
+
+            /* Typography */
+            --font-ui: 'Inter', sans-serif;
+            --font-mono: 'Space Mono', monospace;
+
+            /* Z-Index Layers */
+            z-index: {
+                scene: 0,
+                ambient: 1,
+                ui-base: 10,
+                ui-overlay: 20,
+                tooltip: 30,
+                loading: 100
+            };
+        }
+
+        /* ==========================================================================
+           2. BASE RESETS & TYPOGRAPHY
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--space-bg);
+            color: var(--text-primary);
+            font-family: var(--font-ui);
+            overflow: hidden; /* Prevent scrolling, UI handles it */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Custom Scrollbar for Glass Panels */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        h1, h2, h3, h4 {
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .mono {
+            font-family: var(--font-mono);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .label-small {
+            font-family: var(--font-ui);
+            font-weight: 500;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+        }
+
+        button {
+            background: none;
+            border: none;
+            color: inherit;
+            font: inherit;
+            cursor: pointer;
+            outline: none;
+        }
+
+        /* ==========================================================================
+           3. BACKGROUND / SCENE SIMULATION
+           ========================================================================== */
+        /* This simulates the WebGL canvas + Frutiger Nova ambient lighting */
+        #scene-container {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background: radial-gradient(circle at 50% 50%, #111a30 0%, var(--space-bg) 100%);
+        }
+
+        /* Ambient Orbs */
+        .ambient-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.25;
+            will-change: transform;
+        }
+        .orb-1 { top: 10%; left: 20%; width: 50vw; height: 50vw; background: var(--orb-1); }
+        .orb-2 { bottom: 20%; right: 10%; width: 60vw; height: 40vw; background: var(--orb-2); }
+        .orb-3 { top: 40%; left: 60%; width: 40vw; height: 40vw; background: var(--orb-3); }
+
+        /* ==========================================================================
+           4. UI SYSTEM UTILITIES
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+        }
+
+        @supports not (backdrop-filter: blur(16px)) {
+            .glass-panel { background: rgba(15, 20, 35, 0.9); }
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-weight: 600;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            box-shadow: 0 0 15px rgba(213, 94, 15, 0.4);
+        }
+        .btn-primary:hover {
+            background: #e66a1a;
+            box-shadow: 0 0 25px rgba(213, 94, 15, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            transition: all 0.2s;
+        }
+        .btn-icon:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        /* ==========================================================================
+           5. COMPONENT: TELEMETRY BAR
+           ========================================================================== */
+        .telemetry-bar {
+            position: fixed;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 20px;
+            will-change: transform;
+        }
+
+        .telemetry-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .telemetry-value {
+            color: var(--telemetry);
+            font-size: 16px;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(111, 215, 236, 0.3);
+        }
+        
+        .telemetry-value.met {
+            font-size: 20px;
+            color: var(--text-primary);
+            text-shadow: none;
+            font-weight: 700;
+        }
+
+        .telemetry-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--nominal);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--nominal);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--nominal);
+            animation: pulse-nominal 2s infinite;
+        }
+
+        @keyframes pulse-nominal {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* ==========================================================================
+           6. COMPONENT: MISSION INFO DRAWER
+           ========================================================================== */
+        .mission-drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 320px;
+            transform: translateX(-100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 20;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            overflow-y: auto;
+            border-left: none;
+            border-top: none;
+            border-bottom: none;
+            border-radius: 0 16px 16px 0;
+        }
+
+        .mission-drawer.active {
+            transform: translateX(0);
+        }
+
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .crew-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 12px;
+        }
+
+        .crew-member {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            text-align: center;
+        }
+
+        .crew-photo {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--orb-1), var(--orb-3));
+            border: 1px solid var(--glass-border);
+            object-fit: cover;
+        }
+
+        .crew-name { font-size: 13px; font-weight: 500; }
+        .crew-role { font-size: 11px; color: var(--text-secondary); }
+
+        .timeline {
+            border-left: 2px solid var(--glass-border);
+            padding-left: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-top: 12px;
+        }
+
+        .timeline-item { position: relative; }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -21px;
+            top: 4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--photo-inactive);
+        }
+        .timeline-item.active::before {
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        /* ==========================================================================
+           7. COMPONENT: PHOTO DETAIL PANEL
+           ========================================================================== */
+        .photo-panel {
+            position: fixed;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border-radius: 16px;
+        }
+
+        .photo-hero {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #000;
+            border-radius: 12px 12px 0 0;
+            overflow: hidden;
+        }
+
+        .photo-hero img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 12px;
+            pointer-events: none;
+        }
+
+        .photo-nav button {
+            pointer-events: auto;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .photo-content {
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .photo-header h2 { font-size: 18px; margin-bottom: 4px; }
+        .photo-header p { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .data-item .label-small { color: var(--text-secondary); }
+        .data-item .mono { font-size: 14px; color: var(--telemetry); }
+
+        .context-block {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid var(--glass-border);
+        }
+
+        /* ==========================================================================
+           8. COMPONENT: SCROLL PROGRESS (MOBILE / TABLET)
+           ========================================================================== */
+        .scroll-progress {
+            position: fixed;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 40vh;
+            width: 20px;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+        }
+
+        .scroll-track {
+            position: relative;
+            width: 2px;
+            height: 100%;
+            background: rgba(100, 200, 220, 0.2); /* Ribbon dim */
+            border-radius: 2px;
+        }
+
+        .scroll-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 35%; /* Dynamic */
+            background: var(--ribbon);
+            box-shadow: 0 0 8px var(--ribbon);
+            border-radius: 2px;
+        }
+
+        .scroll-marker {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: var(--photo-inactive);
+            border-radius: 50%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .scroll-current {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 50%;
+            left: 50%;
+            top: 35%; /* Match fill */
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 12px var(--accent);
+            z-index: 2;
+        }
+
+        /* ==========================================================================
+           9. COMPONENT: JUMP TO NOW FAB (MOBILE)
+           ========================================================================== */
+        .fab-jump {
+            position: fixed;
+            bottom: 100px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(213, 94, 15, 0.5);
+            z-index: 15;
+            transition: transform 0.2s;
+        }
+
+        .fab-jump::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 2px solid var(--accent);
+            opacity: 0;
+            animation: ripple 2s infinite;
+        }
+
+        @keyframes ripple {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        /* ==========================================================================
+           10. COMPONENT: TOOLTIP (DESKTOP)
+           ========================================================================== */
+        .photo-tooltip {
+            position: fixed;
+            top: 40%;
+            left: 50%;
+            transform: translate(15px, -15px); /* Offset from cursor */
+            padding: 8px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            z-index: 30;
+            border-radius: 8px;
+            pointer-events: none; /* Let mouse pass through */
+            width: max-content;
+        }
+
+        .tooltip-thumb {
+            width: 48px;
+            height: 48px;
+            border-radius: 4px;
+            background: #222;
+            object-fit: cover;
+        }
+
+        .tooltip-info h4 { font-size: 13px; margin-bottom: 2px; }
+        .tooltip-info .label-small { color: var(--accent); }
+
+        /* ==========================================================================
+           11. LOADING STATE
+           ========================================================================== */
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--space-bg);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-logo {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin-bottom: 40px;
+            text-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }
+
+        .loading-bar-container {
+            width: 240px;
+            height: 2px;
+            background: var(--glass-border);
+            border-radius: 1px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loading-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 45%; /* Animated via JS */
+            background: var(--ribbon);
+            box-shadow: 0 0 10px var(--ribbon);
+            transition: width 0.2s;
+        }
+
+        .loading-text {
+            margin-top: 16px;
+            color: var(--text-secondary);
+        }
+
+        /* ==========================================================================
+           12. RESPONSIVE LAYOUTS
+           ========================================================================== */
+        
+        /* MOBILE (< 768px) */
+        @media (max-width: 767px) {
+            .telemetry-bar {
+                bottom: 12px;
+                left: 12px;
+                right: 12px;
+                border-radius: 12px;
+                flex-direction: row;
+                overflow-x: auto; /* Allow swipe if tight */
+            }
+            .telemetry-desktop-only { display: none; }
+            
+            .photo-panel {
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: 85vh;
+                transform: translateY(100%);
+                border-radius: 20px 20px 0 0;
+                border-bottom: none;
+                border-left: none;
+                border-right: none;
+            }
+            
+            .photo-panel.active { transform: translateY(0); }
+            
+            /* Bottom Sheet Drag Handle */
+            .photo-panel::before {
+                content: '';
+                position: absolute;
+                top: 8px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 40px;
+                height: 4px;
+                border-radius: 2px;
+                background: rgba(255,255,255,0.3);
+                z-index: 10;
+            }
+
+            .mission-drawer { width: 100%; }
+        }
+
+        /* TABLET & DESKTOP (>= 768px) */
+        @media (min-width: 768px) {
+            .telemetry-bar {
+                top: 24px;
+                left: 50%;
+                transform: translateX(-50%);
+                border-radius: 10px;
+                width: auto;
+                min-width: 600px;
+            }
+
+            .telemetry-group { flex-direction: row; align-items: baseline; gap: 8px; }
+            .telemetry-group .label-small { margin-right: 8px; }
+
+            .scroll-progress { display: none; } /* Use orbit controls mostly */
+            .fab-jump { display: none; } /* Moved to top bar */
+
+            .photo-panel {
+                top: 24px;
+                right: 24px;
+                bottom: 24px;
+                width: 420px;
+                transform: translateX(120%);
+            }
+            .photo-panel.active { transform: translateX(0); }
+        }
+
+        /* LARGE DESKTOP (>= 1200px) */
+        @media (min-width: 1200px) {
+            .telemetry-bar { min-width: 800px; }
+            .mission-drawer { width: 380px; }
+            .photo-panel { width: 480px; }
+        }
+
+        /* Utility for Demo */
+        .controls-overlay {
+            position: fixed; top: 10px; left: 10px; z-index: 999; display: flex; gap: 10px;
+        }
+        .controls-overlay button { padding: 4px 8px; font-size: 12px; background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 4px; color: white;}
+    </style>
+</head>
+<body>
+
+    <!-- DEMO CONTROLS (Not part of final design) -->
+    <div class="controls-overlay">
+        <button onclick="document.getElementById('photo-panel').classList.toggle('active')">Toggle Photo Panel</button>
+        <button onclick="document.getElementById('mission-drawer').classList.toggle('active')">Toggle Drawer</button>
+        <button onclick="demoLoading()">Show Loading</button>
+    </div>
+
+    <!-- BACKGROUND EFFECTS -->
+    <div id="scene-container"></div>
+    <div class="ambient-orb orb-1"></div>
+    <div class="ambient-orb orb-2"></div>
+    <div class="ambient-orb orb-3"></div>
+
+    <!-- LOADING SCREEN -->
+    <div class="loading-screen" id="loading-screen">
+        <div class="loading-logo">Artemis II</div>
+        <div class="loading-bar-container">
+            <div class="loading-bar" id="loading-bar"></div>
+        </div>
+        <div class="label-small mono loading-text" id="loading-text">Loading Star Catalog...</div>
+    </div>
+
+    <!-- MAIN UI: TELEMETRY BAR -->
+    <div class="glass-panel telemetry-bar">
+        <button class="btn-icon" onclick="document.getElementById('mission-drawer').classList.toggle('active')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+
+        <div class="telemetry-group">
+            <span class="label-small">MET</span>
+            <span class="mono telemetry-value met" id="met-clock">002:14:36:22</span>
+        </div>
+
+        <div class="telemetry-group telemetry-desktop-only">
+            <span class="label-small">Earth</span>
+            <span class="mono telemetry-value">284,310 <span style="font-size: 12px; color: var(--text-secondary)">km</span></span>
+        </div>
+
+        <div class="telemetry-group telemetry-desktop-only">
+            <span class="label-small">Moon</span>
+            <span class="mono telemetry-value">112,055 <span style="font-size: 12px; color: var(--text-secondary)">km</span></span>
+        </div>
+
+        <div class="telemetry-group">
+            <span class="label-small">Vel</span>
+            <span class="mono telemetry-value">1.24 <span style="font-size: 12px; color: var(--text-secondary)">km/s</span></span>
+        </div>
+
+        <div class="telemetry-status telemetry-desktop-only">
+            <div class="status-dot"></div>
+            Translunar Coast
+        </div>
+
+        <button class="btn-primary telemetry-desktop-only">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+            Jump to Now
+        </button>
+    </div>
+
+    <!-- MAIN UI: MISSION DRAWER -->
+    <div class="glass-panel mission-drawer" id="mission-drawer">
+        <div class="drawer-header">
+            <h3>Artemis II Mission</h3>
+            <button class="btn-icon" onclick="document.getElementById('mission-drawer').classList.remove('active')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <div>
+            <span class="label-small">The Crew</span>
+            <div class="crew-grid">
+                <div class="crew-member">
+                    <div class="crew-photo"></div>
+                    <div>
+                        <div class="crew-name">Reid Wiseman</div>
+                        <div class="crew-role">Commander</div>
+                    </div>
+                </div>
+                <div class="crew-member">
+                    <div class="crew-photo"></div>
+                    <div>
+                        <div class="crew-name">Victor Glover</div>
+                        <div class="crew-role">Pilot</div>
+                    </div>
+                </div>
+                <div class="crew-member">
+                    <div class="crew-photo"></div>
+                    <div>
+                        <div class="crew-name">Christina Koch</div>
+                        <div class="crew-role">Mission Spec. 1</div>
+                    </div>
+                </div>
+                <div class="crew-member">
+                    <div class="crew-photo"></div>
+                    <div>
+                        <div class="crew-name">Jeremy Hansen</div>
+                        <div class="crew-role">Mission Spec. 2</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <span class="label-small">Flight Timeline</span>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="label-small">Nov 2025</div>
+                    <div>Launch & Earth Orbit</div>
+                </div>
+                <div class="timeline-item active">
+                    <div class="label-small" style="color: var(--accent)">MET 000:02:14</div>
+                    <div>Translunar Injection</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="label-small">Flight Day 4</div>
+                    <div>Lunar Flyby</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="label-small">Flight Day 10</div>
+                    <div>Pacific Splashdown</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN UI: PHOTO DETAIL PANEL -->
+    <div class="glass-panel photo-panel" id="photo-panel">
+        <div class="photo-hero">
+            <!-- Simulated image placeholder with Frutiger Nova colors -->
+            <div style="width:100%; height:100%; background: linear-gradient(45deg, #0689E4, #1299CA, #0A0E1A); display:flex; align-items:center; justify-content:center;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </div>
+            
+            <div class="photo-nav">
+                <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+                <button><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+            </div>
+            
+            <button class="btn-icon" style="position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.5); border:none;" onclick="document.getElementById('photo-panel').classList.remove('active')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
+
+        <div class="photo-content">
+            <div class="photo-header">
+                <h2>Earthrise from Orion</h2>
+                <p>Looking back at Earth during the outbound translunar coast. The African continent is visible through the cloud cover.</p>
+            </div>
+
+            <div class="context-block data-grid">
+                <div class="data-item">
+                    <span class="label-small">Capture Time (UTC)</span>
+                    <span class="mono">2025-11-14 18:42:00</span>
+                </div>
+                <div class="data-item">
+                    <span class="label-small">Mission Time</span>
+                    <span class="mono">MET 001:12:30</span>
+                </div>
+            </div>
+
+            <div>
+                <span class="label-small" style="display:block; margin-bottom:12px;">Telemetry at Capture</span>
+                <div class="data-grid">
+                    <div class="data-item">
+                        <span class="label-small">Dist. Earth</span>
+                        <span class="mono">145,200 km</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="label-small">Dist. Moon</span>
+                        <span class="mono">240,100 km</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="label-small">Velocity</span>
+                        <span class="mono">3.45 km/s</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="label-small">Phase</span>
+                        <span class="mono">Outbound</span>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <span class="label-small" style="display:block; margin-bottom:12px;">Camera Metadata</span>
+                <div class="data-grid">
+                    <div class="data-item">
+                        <span class="label-small">Camera</span>
+                        <span class="mono">Nikon Z9</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="label-small">Lens</span>
+                        <span class="mono">50mm f/1.2</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="label-small">Exposure</span>
+                        <span class="mono">1/800s</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="label-small">Aperture / ISO</span>
+                        <span class="mono">f/8.0 • 400</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN UI: MOBILE SCROLL PROGRESS -->
+    <div class="scroll-progress">
+        <div class="scroll-track">
+            <div class="scroll-fill"></div>
+            <!-- Mock Markers -->
+            <div class="scroll-marker" style="top: 10%"></div>
+            <div class="scroll-marker" style="top: 25%"></div>
+            <div class="scroll-marker" style="top: 60%"></div>
+            <div class="scroll-marker" style="top: 80%"></div>
+            <!-- Current Position -->
+            <div class="scroll-current"></div>
+        </div>
+    </div>
+
+    <!-- MAIN UI: MOBILE FAB -->
+    <button class="fab-jump">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+
+    <!-- MAIN UI: DESKTOP TOOLTIP MOCKUP -->
+    <!-- Usually hidden/managed via JS, visible here for design reference -->
+    <div class="glass-panel photo-tooltip telemetry-desktop-only">
+        <div class="tooltip-thumb" style="background: linear-gradient(45deg, #0689E4, #1299CA)"></div>
+        <div class="tooltip-info">
+            <span class="label-small">FD 2</span>
+            <h4>Translunar Outbound</h4>
+        </div>
+    </div>
+
+    <!-- INTERACTION LOGIC -->
+    <script>
+        // 1. Mission Elapsed Time (MET) Counter Simulation
+        function updateMET() {
+            const metElement = document.getElementById('met-clock');
+            // Mocking a ticking clock
+            let [days, hours, mins, secs] = metElement.innerText.split(':').map(Number);
+            
+            secs++;
+            if(secs >= 60) { secs = 0; mins++; }
+            if(mins >= 60) { mins = 0; hours++; }
+            if(hours >= 24) { hours = 0; days++; }
+
+            const pad = (num, places=2) => String(num).padStart(places, '0');
+            metElement.innerText = `${pad(days,3)}:${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+        }
+        setInterval(updateMET, 1000);
+
+        // 2. Hide Loading Screen Demo
+        setTimeout(() => {
+            document.getElementById('loading-bar').style.width = '100%';
+            document.getElementById('loading-text').innerText = 'Initializing Scene...';
+            setTimeout(() => {
+                document.getElementById('loading-screen').classList.add('hidden');
+                // Open panel for demo
+                if(window.innerWidth >= 768) {
+                    setTimeout(() => document.getElementById('photo-panel').classList.add('active'), 1000);
+                }
+            }, 800);
+        }, 1500);
+
+        function demoLoading() {
+            const screen = document.getElementById('loading-screen');
+            const bar = document.getElementById('loading-bar');
+            screen.classList.remove('hidden');
+            bar.style.width = '10%';
+            setTimeout(() => { bar.style.width = '60%'; }, 500);
+            setTimeout(() => { bar.style.width = '100%'; }, 1500);
+            setTimeout(() => { screen.classList.add('hidden'); }, 2000);
+        }
+    </script>
+</body>
+</html>
