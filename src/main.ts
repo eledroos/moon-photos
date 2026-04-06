@@ -92,9 +92,7 @@ async function main() {
   // Tooltip (desktop)
   const tooltip = createPhotoTooltip()
 
-  // FAB (mobile)
-  const fab = createJumpToNowFab()
-  updateFabVisibility(fab)
+  // FAB removed — "Jump to Orion" in telemetry bar handles both desktop and mobile
 
   // Photo title labels near ghost markers (clustered)
   createPhotoLabels(clusters, data.photos.photos, ctx.camera)
