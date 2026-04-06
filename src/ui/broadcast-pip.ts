@@ -10,37 +10,42 @@ let isOpen = false
 export function createBroadcastPip(): HTMLElement {
   // Toggle button
   const btn = document.createElement('button')
-  btn.className = 'btn-icon broadcast-btn'
+  btn.className = 'telem-btn broadcast-btn'
   btn.innerHTML = `
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M17 10.5V7a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1v-3.5l4 4v-11l-4 4z"/>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
     </svg>
+    <span>Watch NASA Live</span>
   `
-  btn.title = 'Watch NASA Broadcast'
   btn.style.cssText = `
     position: fixed;
-    bottom: 24px;
-    left: 24px;
+    top: 32px;
+    left: 16px;
     z-index: 15;
-    width: 44px;
-    height: 44px;
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    border-radius: 8px;
-    cursor: pointer;
-    color: var(--text-primary);
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    background: var(--glass-bg);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   `
 
   // PIP container
   pipContainer = document.createElement('div')
   pipContainer.style.cssText = `
     position: fixed;
-    bottom: 80px;
-    left: 24px;
+    top: 64px;
+    left: 16px;
     width: 380px;
     height: 214px;
     z-index: 15;

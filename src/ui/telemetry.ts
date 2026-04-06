@@ -83,7 +83,7 @@ export function createTelemetryBar(options?: {
         align-items: center;
         gap: 6px;
         padding: 8px 12px;
-        margin-top: 24px; /* below marquee bar */
+        margin-top: 30px; /* below marquee bar + gap */
       }
       .telem-btn {
         display: inline-flex;

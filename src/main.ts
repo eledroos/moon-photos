@@ -15,6 +15,8 @@ import { createPhotoPanel } from './ui/photo-detail.js'
 import { createMissionDrawer } from './ui/mission-info.js'
 import { createJumpToNowFab, updateFabVisibility, createPhotoTooltip } from './ui/jump-to-now.js'
 import { createBroadcastPip } from './ui/broadcast-pip.js'
+import { showOnboardingTooltip } from './ui/onboarding.js'
+import { createZoomSlider } from './ui/zoom-slider.js'
 import { createTimelineBar } from './ui/timeline-bar.js'
 import { createPhotoLabels } from './ui/photo-labels.js'
 
@@ -189,6 +191,14 @@ async function main() {
       window.dispatchEvent(new CustomEvent('jump-to-now'))
     })
   }
+
+  // Zoom slider (desktop only)
+  if (!isMobile && controls) {
+    createZoomSlider(ctx.camera, controls)
+  }
+
+  // Onboarding tooltip (first visit)
+  showOnboardingTooltip()
 
   // 12. Start animation loop
   startAnimationLoop(ctx)
