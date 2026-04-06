@@ -13,7 +13,8 @@
     "setup": "bash scripts/setup-assets.sh && mkdir -p data",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "npm run build && tsx server/index.ts"
+    "start": "npm run build && tsx server/index.ts",
+    "postinstall": "echo '\n  Run: npm run setup\n  Then: cp config.example.json config.json  (add your NASA API key)\n  Then: npm run server & npm run dev\n'"
   },
   "keywords": [],
   "author": "",
