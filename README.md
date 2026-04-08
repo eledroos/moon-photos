@@ -2,20 +2,19 @@
 
 An interactive 3D visualization that maps photographs taken by the Artemis II crew to Orion's real trajectory through space. As NASA releases new photos, they appear pinned to the exact position where they were captured — connecting *where* a photo was taken to *what* it shows.
 
-**Live mission**: Artemis II launched April 1, 2026 — the first crewed lunar flyby since Apollo 17 (1972).
+Artemis II launched April 1, 2026 and is the first crewed lunar flyby since Apollo 17 (1972).
 
 ## Features
 
 - **Astronomically accurate 3D scene** — Earth, Moon, and Sun positioned from JPL Horizons ephemeris data. 8,900+ real stars from the HYG catalog with correct positions, magnitudes, and colors.
 - **Live trajectory** — Orion's position updates in real time from NASA/JSC navigation data. Bold cyan line shows the traveled path; dashed line shows the predicted future trajectory.
-- **28 crew photographs** pinned to the trajectory by EXIF capture timestamps, with ghost wireframe Orion markers showing where each was taken.
+- **Crew photographs** pinned to the trajectory by EXIF capture timestamps, with ghost wireframe Orion markers showing where each was taken.
 - **Photo viewer** — bottom panel shows the photo with metadata (MET, distances, velocity, camera info). Click to view full NASA original resolution.
 - **Photo grid** — browse all mission photos grouped by flight day.
 - **Telemetry bar** — live Mission Elapsed Time, distance to Earth/Moon, velocity.
 - **Timeline bar** — vertical navigation showing Earth → Moon → Splashdown with clickable photo markers.
 - **Mission drawer** — crew bios (linked to NASA profiles), detailed 16-event flight timeline, project credits.
 - **NASA broadcast PIP** — floating YouTube player for the live NASA stream.
-- **Self-updating** — trajectory data refreshes every 30 minutes, photos every 10 minutes.
 
 ## Quick Start
 
@@ -88,7 +87,6 @@ Epoch: `2026-04-01T22:35:00Z` (liftoff). Displayed as `DDD:HH:MM:SS`.
 - **Backend**: Express.js, exifr (EXIF parsing), tsx (TypeScript runner)
 - **Data**: JPL Horizons API, NASA Images API, NASA WordPress gallery
 - **3D Assets**: NASA Blue Marble (Earth), Solar System Scope textures (Moon, Sun), HYG v4.1 star catalog
-- **Design**: Frutiger Nova aesthetic + Mirror's Edge wayfinding (see `docs/gemini-design-brief.md`)
 
 ## Project Structure
 
