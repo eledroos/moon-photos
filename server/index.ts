@@ -248,21 +248,8 @@ async function startup(): Promise<void> {
     console.error('[Startup] Error fetching photos:', err)
   }
 
-  // Start scheduler for recurring fetches
-  startScheduler(
-    {
-      trajectoryIntervalMs: config.polling.trajectoryIntervalMs,
-      photoIntervalMs: config.polling.photoIntervalMs,
-    },
-    {
-      onFetchTrajectory: async () => {
-        try { await fetchTrajectoryData() } catch (err) { console.error('[Scheduler] Trajectory error:', err) }
-        try { await fetchMoonData() } catch (err) { console.error('[Scheduler] Moon error:', err) }
-        try { await fetchSunData() } catch (err) { console.error('[Scheduler] Sun error:', err) }
-      },
-      onFetchPhotos: fetchPhotoData,
-    },
-  )
+  // Archive mode: no recurring fetches — data is static
+  console.log('[Server] Archive mode — no polling scheduler')
 
   // Start listening
   app.listen(PORT, () => {

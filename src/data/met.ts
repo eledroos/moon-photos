@@ -1,17 +1,19 @@
-import { formatMet, currentMet, utcToMet, flightDay, LAUNCH_EPOCH_MS } from '../../shared/met.js'
+import { formatMet, utcToMet, flightDay, LAUNCH_EPOCH_MS } from '../../shared/met.js'
+import { getMissionMet } from './mission-time.js'
 
-export { formatMet, currentMet, utcToMet, flightDay, LAUNCH_EPOCH_MS }
+export { formatMet, utcToMet, flightDay, LAUNCH_EPOCH_MS }
+
+// Archive mode: return fixed mission-end MET
+export function currentMet(): number {
+  return getMissionMet()
+}
 
 /**
- * Creates a MET ticker that calls the callback every second with the formatted MET string.
- * Returns a cleanup function to stop the ticker.
+ * Archive mode: calls the callback once with the fixed final MET.
+ * No ticking interval.
  */
 export function createMetTicker(callback: (formatted: string, metSeconds: number) => void): () => void {
-  const update = () => {
-    const met = currentMet()
-    callback(formatMet(met), met)
-  }
-  update() // Call immediately
-  const id = setInterval(update, 1000)
-  return () => clearInterval(id)
+  const met = getMissionMet()
+  callback(formatMet(met), met)
+  return () => {}
 }

@@ -51,12 +51,8 @@ const TIMELINE_EVENTS = [
 ]
 
 function getActiveEventIndex(): number {
-  const now = Date.now()
-  let idx = -1
-  for (let i = 0; i < TIMELINE_EVENTS.length; i++) {
-    if (now >= Date.parse(TIMELINE_EVENTS[i].ts)) idx = i
-  }
-  return idx
+  // Archive mode: mission is complete — last event (splashdown) is active
+  return TIMELINE_EVENTS.length - 1
 }
 
 function buildCrewGrid(): string {

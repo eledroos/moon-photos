@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { SCALE, onAnimate } from './setup.js'
+import { SCALE } from './setup.js'
 
 const EARTH_RADIUS = 6371 * SCALE  // 6.371 units
 
@@ -89,13 +89,11 @@ export function createEarth(scene: THREE.Scene): THREE.Group {
   group.renderOrder = 0
   scene.add(group)
 
-  // Real sidereal rotation — update every frame but it's just setting a value, not searching arrays
-  onAnimate(() => {
-    const now = new Date()
-    const angle = gmstRadians(now)
-    earth.rotation.y = angle
-    clouds.rotation.y = angle + 0.02 // Clouds drift slightly relative to surface
-  })
+  // Archive mode: lock Earth rotation to flyby time
+  const flybyDate = new Date('2026-04-06T23:45:00Z')
+  const angle = gmstRadians(flybyDate)
+  earth.rotation.y = angle
+  clouds.rotation.y = angle + 0.02
 
   return group
 }

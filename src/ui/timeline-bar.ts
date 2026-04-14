@@ -223,25 +223,9 @@ export function createTimelineBar(options: TimelineBarOptions): HTMLElement {
   `
   track.appendChild(currentDot)
 
-  // Update every 5s
-  function updatePosition() {
-    const nowUtc = new Date().toISOString()
-    const rawProgress = getPointProgress(trajectoryData, nowUtc)
-
-    let timelinePos: number
-    if (rawProgress <= flybyProgress) {
-      timelinePos = (rawProgress / flybyProgress) * 0.5
-    } else {
-      timelinePos = 0.5 + ((rawProgress - flybyProgress) / (1 - flybyProgress)) * 0.5
-    }
-
-    const pct = `${timelinePos * 100}%`
-    progressFill.style.height = pct
-    currentDot.style.top = pct
-  }
-
-  updatePosition()
-  setInterval(updatePosition, 5000)
+  // Archive mode: mission complete — 100% progress
+  progressFill.style.height = '100%'
+  currentDot.style.top = '100%'
 
   const uiLayer = document.getElementById('ui-layer')
   if (uiLayer) uiLayer.appendChild(bar)

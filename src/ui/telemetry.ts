@@ -62,12 +62,7 @@ export function createTelemetryBar(options?: {
       <span id="photo-count">0</span>
     </button>
 
-    <button class="telem-btn telem-btn-accent" id="jump-to-now-btn">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
-      </svg>
-      Jump to Orion
-    </button>
+    <span class="telem-btn" style="cursor:default;opacity:0.6;font-size:10px;">Mission Complete</span>
   `
 
   const uiLayer = document.getElementById('ui-layer')
@@ -173,9 +168,9 @@ export function createTelemetryBar(options?: {
   })
 
   function update(trajectory: TrajectoryData, moon: BodyData, photos: PhotosData): void {
-    const utc = new Date().toISOString()
     const pos = getCurrentPosition(trajectory.vectors)
-    const moonPos = interpolatePosition(moon.vectors, utc)
+    // Archive mode: use flyby moon position for distance calc
+    const moonPos: [number, number, number] = [-129398, -381922, -36343]
     allPhotos = photos.photos
 
     const distEarthEl = bar.querySelector('#dist-earth')

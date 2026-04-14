@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { SCALE } from './setup.js'
 import type { BodyData } from '../../shared/types.js'
 import { interpolatePosition } from '../data/interpolate.js'
+import { FLYBY_UTC } from '../data/mission-time.js'
 
 // The Sun is ~150M km away. We render it at a fixed position in the scene
 // along the real direction, close enough to always be visible.
@@ -69,8 +70,7 @@ export function createSun(scene: THREE.Scene): THREE.Group {
 }
 
 export function updateSunPosition(sunData: BodyData): void {
-  const utc = new Date().toISOString()
-  const pos = interpolatePosition(sunData.vectors, utc)
+  const pos = interpolatePosition(sunData.vectors, FLYBY_UTC)
 
   // Real direction to Sun (normalized)
   const dir = new THREE.Vector3(pos[0], pos[2], -pos[1]).normalize()

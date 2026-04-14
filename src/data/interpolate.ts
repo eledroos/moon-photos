@@ -42,13 +42,14 @@ export function interpolatePosition(
 export function getCurrentPosition(
   vectors: AnyVector[],
 ): [number, number, number] {
-  return interpolatePosition(vectors, new Date().toISOString())
+  // Archive mode: use fixed mission end time
+  return interpolatePosition(vectors, '2026-04-10T23:00:00Z')
 }
 
 export function getCurrentVelocity(
   vectors: StateVector[],
 ): number {
-  const utc = new Date().toISOString()
+  const utc = '2026-04-10T23:00:00Z' // Archive mode: fixed mission end
   const [a, b, t] = findBracketingVectors(vectors, utc)
   const aState = a as StateVector
   const bState = b as StateVector
